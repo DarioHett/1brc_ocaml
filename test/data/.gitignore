@@ -1,0 +1,4 @@
+*.out
+measurements-*-bil*
+measurements-*-mil*
+measurements.txt

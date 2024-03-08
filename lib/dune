@@ -1,0 +1,3 @@
+(library
+ (name weather_stats)
+ (libraries base core core_bench domainslib stdlib))

@@ -1,0 +1,5 @@
+(executable
+ (public_name weather_stats)
+ (modes exe byte)
+ (name main)
+ (libraries domainslib weather_stats))
