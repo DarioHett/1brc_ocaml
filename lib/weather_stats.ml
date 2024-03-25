@@ -11,16 +11,24 @@ let get_weather_stats_table_fork filename start stop =
   in
   let table = Hashtbl.create (module String) ~growth_allowed:true ~size:50_000 in
   let channel = In_channel.create filename in
-  let pos = ref start in
+  let channel_size = In_channel.length channel in 
+  let data = Core_unix.map_file (Core_unix.descr_of_in_channel channel) Bigarray.Char Bigarray.c_layout ~shared:false [|Int.of_int64_exn channel_size|] in
+  let data = Bigarray.array1_of_genarray data in
+  let pos = ref (Int.of_int64_exn start) in
+  let last_pos = ref (Int.of_int64_exn start) in
   let line = ref "" in
-  let line_length = ref 0L in
+  let line_length = ref 0 in
   (* Move to starting place in file before reading. *)
   In_channel.seek channel start;
-  while Int64.( < ) !pos stop do
+  while Int.( < ) !pos @@ Int.of_int64_exn stop do
+    while Char.(<>) '\n' @@ Bigstring.get data !pos do
+      pos := (Int.( + ) !pos 1);
+    done;
     try
-      line := In_channel.input_line_exn channel;
-      line_length := Int64.( + ) (Int64.of_int (String.length !line)) 1L;
-      pos := Int64.( + ) !pos !line_length;
+      line_length := (Int.(-) !pos !last_pos);
+      line := Bigstring.to_string ~pos:!last_pos ~len:!line_length data;
+      pos := Int.( + ) !pos 1;
+      last_pos := !pos;
       let loc, temp = parse_line_exn !line in
       if Hashtbl.mem table loc
       then (
@@ -31,8 +39,9 @@ let get_weather_stats_table_fork filename start stop =
         let new_result = Record.Record.create_record temp in
         Core.Hashtbl.add_exn table ~key:loc ~data:new_result)
     with
-    | End_of_file -> pos := stop
+    | End_of_file -> pos := Int.of_int64_exn stop
   done;
+  Bigstring.unsafe_destroy data;
   In_channel.close channel;
   table
 ;;
@@ -52,7 +61,7 @@ let get_weather_stats_table filename pool domains =
     get_weather_stats_table_fork filename start stop
   | Some domains', Some pool' ->
     let master_table =
-      Hashtbl.create (module String) ~growth_allowed:false ~size:500_000
+      Hashtbl.create (module String) ~growth_allowed:false ~size:500
     in
     let chunks = File_utils.Filechunks.get_file_chunks filename domains' in
     let num_chunks = Array.length chunks in
